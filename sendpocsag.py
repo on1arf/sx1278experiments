@@ -24,6 +24,11 @@
 # https://micropython.org/download/esp32spiram/
 
 
+# This program is available under the MIT license
+
+# version 0.1.0 14/11/2021
+
+
 ##### imports
 
 from machine import SPI
@@ -332,8 +337,7 @@ def createpocsagmsg(address, source, txt):
 	# 2.1 convert text into int, also add EOT char
 	ts=[ord(c) for c in txt] + [0x04] 
 
-	## 2.2 make sure all characers are 7 bit
-	#ts=list(map(lambda x: x%128, ts))
+	# 2.2 .. removed
 
 	# 2.3 create one big list of bits
 	textbits=[]
@@ -351,16 +355,20 @@ def createpocsagmsg(address, source, txt):
 
 	# 2.4 make the list of bits  a multiple of 20 bits
 
-	# add '1010...' or '0101...' depending on the last bit of the list
-	if textbits[-1] == 1:
-		textbits += [0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1]
-	else:
-		# last bit is a 0
-		textbits += [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0]
-	#end
+	if (len(textbits) % 20) != 0:
+		# add '1010...' or '0101...' depending on the last bit of the list
+		if textbits[-1] == 1:
+			textbits += [0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1]
+		else:
+			# last bit is a 0
+			textbits += [1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0,1,0]
+		#end
 
-	ncw = len(textbits)//20 # number of codewords
-	textbits=textbits[:(ncw*20)] # truncate to a multiple of 20
+		ncw = len(textbits)//20 # number of codewords
+		textbits=textbits[:(ncw*20)] # truncate to a multiple of 20
+	else
+		ncw = len(textbits)//20
+	#end if
 
 
 
@@ -368,7 +376,7 @@ def createpocsagmsg(address, source, txt):
 
 	startbit=0
 	stopbit=20 # (actually, the 19th bit)
-	for i in range(ncw):
+	for _ in range(ncw):
 		thiscw=textbits[startbit:stopbit]
 		thiscw_i=0
 		for i in range(20):
@@ -436,31 +444,6 @@ def transmitmsg(address,source,txt):
 	for elem in ret:
 		pocsag8b += long4octets(elem)
 	#end for
-
-
-	# 1 batch = 17 cz = 17 * 2 * 2 octets = 68 octets
-	d1=pocsag8b[:60] # 60 octets
-	d2=pocsag8b[60:] # 8 octets
-
-	# set packet length
-	spi_write(RH_RF95_REG_32_PAY_LEN, 68)
-
-	# write 1st block of 60 octets
-	spi_write(RH_RF95_REG_00_FIFO,d1)
-
-	# start TX
-	setModeTx()
-
-	# wait until Fifo Threadhold empty
-	while (spi_read(RH_RF95_REG_3F_IRQ_FL2)[0] & 0x20): pass
-
-	# write 2nd block (8 octets)
-	spi_write(RH_RF95_REG_00_FIFO,d2)
-
-	# wait until packet done
-	while not (spi_read(RH_RF95_REG_3F_IRQ_FL2)[0] & 0x08): pass
-	time.sleep_ms(100) # wait a little bit before shutting down
-	setModeIdle()
 
 
 
